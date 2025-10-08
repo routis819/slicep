@@ -43,6 +43,48 @@ func TestLex(t *testing.T) {
 				{Type: lex.TokenEOF, Value: ""},
 			},
 		},
+		{
+			name:  "Signed Numbers",
+			input: "+123 -45",
+			want: []lex.Token{
+				{Type: lex.TokenTypeNumber, Value: "+123"},
+				{Type: lex.TokenTypeNumber, Value: "-45"},
+				{Type: lex.TokenEOF, Value: ""},
+			},
+		},
+		{
+			name:  "Parens and Signed Numbers",
+			input: "(+123 -45)",
+			want: []lex.Token{
+				{Type: lex.TokenTypeLparen, Value: "("},
+				{Type: lex.TokenTypeNumber, Value: "+123"},
+				{Type: lex.TokenTypeNumber, Value: "-45"},
+				{Type: lex.TokenTypeRparen, Value: ")"},
+				{Type: lex.TokenEOF, Value: ""},
+			},
+		},
+		{
+			name:  "Infnan values",
+			input: "+inf.0 -inf.0 +nan.0 -nan.0",
+			want: []lex.Token{
+				{Type: lex.TokenTypeNumber, Value: "+inf.0"},
+				{Type: lex.TokenTypeNumber, Value: "-inf.0"},
+				{Type: lex.TokenTypeNumber, Value: "+nan.0"},
+				{Type: lex.TokenTypeNumber, Value: "-nan.0"},
+				{Type: lex.TokenEOF, Value: ""},
+			},
+		},
+		{
+			name:  "Parens and Infnan values",
+			input: "(+inf.0 -nan.0)",
+			want: []lex.Token{
+				{Type: lex.TokenTypeLparen, Value: "("},
+				{Type: lex.TokenTypeNumber, Value: "+inf.0"},
+				{Type: lex.TokenTypeNumber, Value: "-nan.0"},
+				{Type: lex.TokenTypeRparen, Value: ")"},
+				{Type: lex.TokenEOF, Value: ""},
+			},
+		},
 	}
 
 	for _, tt := range tests {

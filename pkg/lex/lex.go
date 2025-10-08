@@ -3,9 +3,11 @@ package lex
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 //go:generate stringer -type=TokenType
@@ -79,6 +81,13 @@ func (l *lexer) backup() {
 	}
 }
 
+func (l *lexer) peek() rune {
+	peeked := l.next()
+	l.backup()
+
+	return peeked
+}
+
 func lexDispatch(l *lexer) stateFn {
 	r := l.next()
 
@@ -90,9 +99,9 @@ func lexDispatch(l *lexer) stateFn {
 		l.builder.Reset()
 
 		return lexDispatch
-	} else if unicode.IsDigit(r) {
+	} else if unicode.IsDigit(r) || r == '-' || r == '+' {
 		l.backup()
-		return lexUinteger10
+		return lexReal10
 	}
 
 	switch r {
@@ -120,6 +129,29 @@ func lexDispatch(l *lexer) stateFn {
 	return lexDispatch
 }
 
+func lexReal10(l *lexer) stateFn {
+	r := l.next()
+
+	if r == '-' || r == '+' {
+		l.builder.WriteRune(r)
+
+		peeked := l.peek()
+		if unicode.IsDigit(peeked) {
+			return lexUinteger10
+		} else {
+			return lexInfnan
+		}
+	} else if unicode.IsDigit(r) {
+		l.backup()
+
+		return lexUinteger10
+	} else {
+		// This case should ideally not be reached if lexDispatch correctly
+		// transitions to lexReal10 only for digits, '+' or '-'.
+		panic(fmt.Sprintf("unexpected rune in lexReal10: %c", r))
+	}
+}
+
 func lexUinteger10(l *lexer) stateFn {
 	for {
 		r := l.next()
@@ -130,7 +162,29 @@ func lexUinteger10(l *lexer) stateFn {
 				l.backup()
 			}
 			l.emit(TokenTypeNumber)
+
 			return lexDispatch
 		}
 	}
+}
+
+func lexInfnan(l *lexer) stateFn {
+	infnanStrLen := utf8.RuneCountInString("+inf.0")
+	for utf8.RuneCountInString(l.builder.String()) < infnanStrLen {
+		r := l.next()
+		if r == eof {
+			break
+		}
+		l.builder.WriteRune(r)
+	}
+
+	v := l.builder.String()
+	// +/- is checked in lexReal10
+	v = v[1:]
+	if v != "inf.0" && v != "nan.0" {
+		panic(fmt.Sprintf("invalid number token: %s", v))
+	}
+	l.emit(TokenTypeNumber)
+
+	return lexDispatch
 }
