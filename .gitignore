@@ -33,3 +33,4 @@ go.work.sum
 
 # emacs
 *~
+coverage-0.txt
