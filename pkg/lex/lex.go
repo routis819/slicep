@@ -48,7 +48,7 @@ func Lex(name string, input io.Reader) chan Token {
 type stateFn func(*lexer) stateFn
 
 func (l *lexer) run() {
-	for state := stateNone; state != nil; {
+	for state := lexDispatch; state != nil; {
 		state = state(l)
 	}
 	close(l.tokchan)
@@ -73,7 +73,13 @@ func (l *lexer) next() rune {
 	return r
 }
 
-func stateNone(l *lexer) stateFn {
+func (l *lexer) backup() {
+	if err := l.reader.UnreadRune(); err != nil {
+		panic(err)
+	}
+}
+
+func lexDispatch(l *lexer) stateFn {
 	r := l.next()
 
 	// To comply with the r7rs-small standard, handle Unicode
@@ -83,7 +89,10 @@ func stateNone(l *lexer) stateFn {
 		// whitespace.
 		l.builder.Reset()
 
-		return stateNone
+		return lexDispatch
+	} else if unicode.IsDigit(r) {
+		l.backup()
+		return lexUinteger10
 	}
 
 	switch r {
@@ -105,8 +114,23 @@ func stateNone(l *lexer) stateFn {
 		// etc. For now, we ignore them.
 		l.builder.Reset()
 
-		return stateNone
+		return lexDispatch
 	}
 
-	return stateNone
+	return lexDispatch
+}
+
+func lexUinteger10(l *lexer) stateFn {
+	for {
+		r := l.next()
+		if unicode.IsDigit(r) {
+			l.builder.WriteRune(r)
+		} else {
+			if r != eof {
+				l.backup()
+			}
+			l.emit(TokenTypeNumber)
+			return lexDispatch
+		}
+	}
 }
