@@ -83,7 +83,9 @@ func (l *lexer) backup() {
 
 func (l *lexer) peek() rune {
 	peeked := l.next()
-	l.backup()
+	if peeked != eof {
+		l.backup()
+	}
 
 	return peeked
 }

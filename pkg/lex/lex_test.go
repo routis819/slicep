@@ -85,6 +85,38 @@ func TestLex(t *testing.T) {
 				{Type: lex.TokenEOF, Value: ""},
 			},
 		},
+		{
+			name:  "Decimal Numbers",
+			input: "1.23 .45 1.e2 1.2e+3 1e-4",
+			want: []lex.Token{
+				{Type: lex.TokenTypeNumber, Value: "1.23"},
+				{Type: lex.TokenTypeNumber, Value: ".45"},
+				{Type: lex.TokenTypeNumber, Value: "1.e2"},
+				{Type: lex.TokenTypeNumber, Value: "1.2e+3"},
+				{Type: lex.TokenTypeNumber, Value: "1e-4"},
+				{Type: lex.TokenEOF, Value: ""},
+			},
+		},
+		{
+			name:  "Signed Decimal Numbers",
+			input: "+1.23 -0.5",
+			want: []lex.Token{
+				{Type: lex.TokenTypeNumber, Value: "+1.23"},
+				{Type: lex.TokenTypeNumber, Value: "-0.5"},
+				{Type: lex.TokenEOF, Value: ""},
+			},
+		},
+		{
+			name:  "Parens and Decimal Numbers",
+			input: "(-1.23 +4.5e-2)",
+			want: []lex.Token{
+				{Type: lex.TokenTypeLparen, Value: "("},
+				{Type: lex.TokenTypeNumber, Value: "-1.23"},
+				{Type: lex.TokenTypeNumber, Value: "+4.5e-2"},
+				{Type: lex.TokenTypeRparen, Value: ")"},
+				{Type: lex.TokenEOF, Value: ""},
+			},
+		},
 	}
 
 	for _, tt := range tests {
