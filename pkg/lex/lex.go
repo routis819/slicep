@@ -93,15 +93,22 @@ func (l *lexer) peek() rune {
 func lexDispatch(l *lexer) stateFn {
 	r := l.next()
 
-	// To comply with the r7rs-small standard, handle Unicode
-	// whitespace correctly.
+	// Each state function is responsible for lexing one lexeme and assumes
+	// the lexer is positioned at the start of it. The dispatcher may call
+	// backup() to ensure this before transitioning to a new state.
+
+	// TODO(isr): To comply with the r7rs-small standard, handle
+	// Unicode whitespace correctly.
 	if unicode.IsSpace(r) {
 		// Reset the builder just in case, and skip the
 		// whitespace.
 		l.builder.Reset()
 
 		return lexDispatch
-	} else if unicode.IsDigit(r) || r == '-' || r == '+' {
+	} else if unicode.IsDigit(r) {
+		l.backup()
+		return lexUinteger10
+	} else if r == '-' || r == '+' {
 		l.backup()
 		return lexReal10
 	}
@@ -120,12 +127,11 @@ func lexDispatch(l *lexer) stateFn {
 		l.builder.WriteRune(r)
 		l.emit(TokenTypeRparen)
 	default:
-		// Unhandled characters. A real implementation would
-		// transition to a state for numbers, identifiers,
-		// etc. For now, we ignore them.
-		l.builder.Reset()
-
-		return lexDispatch
+		// Assume anything else starting here is an identifier.
+		// This needs to be more robust for full r7rs-small,
+		// but covers basic identifiers and symbols like '*' etc.
+		l.backup()
+		return lexIdentifier
 	}
 
 	return lexDispatch
@@ -141,16 +147,38 @@ func lexReal10(l *lexer) stateFn {
 		if unicode.IsDigit(peeked) {
 			return lexUinteger10
 		} else {
-			return lexInfnan
+			// If '+' or '-' is not followed by a digit, it's an identifier.
+			// e.g., `+` in `(+ 1 2)`
+			l.emit(TokenTypeIdent)
+			return lexDispatch
 		}
 	} else if unicode.IsDigit(r) {
 		l.backup()
-
 		return lexUinteger10
 	} else {
 		// This case should ideally not be reached if lexDispatch correctly
 		// transitions to lexReal10 only for digits, '+' or '-'.
 		panic(fmt.Sprintf("unexpected rune in lexReal10: %c", r))
+	}
+}
+
+// lexIdentifier scans an identifier.
+func lexIdentifier(l *lexer) stateFn {
+	for {
+		r := l.next()
+		if unicode.IsSpace(r) || r == '(' || r == ')' {
+			l.backup()
+			l.emit(TokenTypeIdent)
+
+			return lexDispatch
+		}
+		if r == eof {
+			l.emit(TokenTypeIdent)
+			l.emit(TokenEOF)
+
+			return nil // Stop the lexer
+		}
+		l.builder.WriteRune(r)
 	}
 }
 
