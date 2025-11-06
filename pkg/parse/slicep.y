@@ -49,7 +49,7 @@ type ProcedureCallNode struct {
 
 program:	command
 		{
-		    $$ = $1
+		    currentLexer.result = $1
 		}
 		;
 
