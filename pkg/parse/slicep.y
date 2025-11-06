@@ -1,19 +1,63 @@
 %{
 package parse
+
+type Node any
+
+type ExprNode struct {}
+
+type IdentifierNode struct {
+    Value string
+}
+
+type NumberNode struct {
+    Value uint
+}
+
+type ProcedureCallNode struct {
+    Operator Node
+    Operands []Node
+}
 %}
 			
-%token LPAREN RPAREN
+%union {
+    uintval uint
+    sval string
+    node Node
+    nodelist []Node
+}
 
-%token IDENT
+%type	<node>		program
+			command
+			expression
+			literal
+			self_evaluating
+			number
+			procedure_call
+			operator
+			operand
 
-%token UINTEGER10
+%type	<nodelist>	operand_star
+
+%token			LPAREN
+			RPAREN
+
+%token	<sval>		IDENT
+
+%token	<uintval>	UINTEGER10
 
 %%
 
 program:	command
-	;
+		{
+		    $$ = $1
+		}
+		;
 
-command: expression;
+command: expression
+		{
+		    $$ = $1 // expression이 생성한 AST 노드를 그대로 반환
+		}
+		;
 
 /* <expression> −→ <identifier> */
 /* | <literal> */
@@ -26,9 +70,18 @@ command: expression;
 /* | <macro block> */
 /* | <includer> */
 
-expression: IDENT
+expression:	IDENT
+		{
+		    $$ = &IdentifierNode{Value: $1}
+		}
 	|	literal
+		{
+		    $$ = $1
+		}
 	|	procedure_call
+		{
+		    $$ = $1
+		}
 		;
 
 /* <literal> −→ <quotation> | <self-evaluating> */
@@ -44,11 +97,17 @@ self_evaluating:
 	;
 
 number:		UINTEGER10
+		{
+		    $$ = &NumberNode{Value: $1}
+		}
 	;
 
 /* <procedure call> −→ (<operator> <operand>*) */
 
 procedure_call:	LPAREN operator operand_star RPAREN
+		{
+		    $$ = &ProcedureCallNode{Operator: $2, Operands: $3}
+		}
 	;
 
 operator:	expression
@@ -56,7 +115,13 @@ operator:	expression
 
 operand_star:
 		/* empty */
+		{
+		    $$ = make([]Node, 0)
+		}
 	|	operand_star operand
+		{
+		    $$ = append($1, $2)
+		}
 	;
 
 operand:	expression
