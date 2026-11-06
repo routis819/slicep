@@ -147,6 +147,23 @@ the R7RS `<num 10>` rules:
 
 ---
 
+## External Representations
+
+`<datum>` is the S-expression structure parsed from the token stream (Stage 1 of
+parsing). Note that any string that parses as an `<expression>` or `<program>` will
+also parse as a sequence of `<datum>`s.
+
+```ebnf
+<datum> -> <simple datum> | <compound datum>
+<simple datum> -> <boolean> | <number>
+    | <string> | <symbol>
+<symbol> -> <identifier>
+<compound datum> -> <list>
+<list> -> (<datum>*)
+```
+
+---
+
 ## Expressions
 
 Arithmetic and comparison operations (`+`, `-`, `*`, `/`, `=`, `<`, `>`, etc.) are
