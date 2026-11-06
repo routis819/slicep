@@ -6,3 +6,19 @@ go test ./...
 goaugtype ./...
 golangci-lint config verify
 golangci-lint run ./...
+
+# Advisory check: Warn if commit size exceeds guideline (excluding tests & generated code)
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+	lines=$(git diff --cached --numstat -- . \
+		':!*_test.go' \
+		':!pkg/lex/lex.go' \
+		':!pkg/lex/tokentype_string.go' \
+		':!pkg/parse/y.go' \
+		| awk '{ sum += $1 + $2 } END { print sum + 0 }')
+
+	if [ "$lines" -gt 300 ]; then
+		printf "\033[33m[Warning]\033[0m Staged changes (%d lines) exceed the 300-line guideline (excluding tests & generated files).\n" "$lines" >&2
+		printf "          Consider splitting into smaller, self-contained commits if feasible.\n" >&2
+	fi
+fi
+
