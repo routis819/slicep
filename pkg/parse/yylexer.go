@@ -40,6 +40,7 @@ func (l *yyLexerImpl) Lex(lval *yySymType) int {
 	switch tok.Type {
 	case lex.TokenTypeIdent:
 		lval.sval = tok.Value
+
 		return IDENT
 	case lex.TokenTypeNumber:
 		// The grammar currently expects UINTEGER10.
@@ -47,9 +48,11 @@ func (l *yyLexerImpl) Lex(lval *yySymType) int {
 		u, err := strconv.ParseUint(tok.Value, 10, 64)
 		if err != nil {
 			l.Error(fmt.Sprintf("invalid number: %s", tok.Value))
+
 			return 0 // Return EOF on error
 		}
 		lval.uintval = uint(u)
+
 		return UINTEGER10
 	case lex.TokenTypeLparen:
 		return LPAREN
