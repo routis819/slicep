@@ -18,15 +18,20 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install re2c
+      - name: Install re2c and goaugtype
         run: |
           sudo apt-get update
           sudo apt-get install -y re2c
+          git clone --depth 1 https://github.com/routis819/goaugtype.git /tmp/goaugtype
+          GOTOOLCHAIN=auto go install -C /tmp/goaugtype ./cmd/goaugtype
 
       - name: Verify go generate is up to date
         run: |
           go generate ./...
           git diff --exit-code
+
+      - name: Run goaugtype
+        run: goaugtype ./...
 
       - name: Run tests
         run: go test -v ./...
