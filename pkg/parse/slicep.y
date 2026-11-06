@@ -1,130 +1,130 @@
 %{
 package parse
-
-type Node any
-
-type ExprNode struct {}
-
-type IdentifierNode struct {
-    Value string
-}
-
-type NumberNode struct {
-    Value uint
-}
-
-type ProcedureCallNode struct {
-    Operator Node
-    Operands []Node
-}
 %}
-			
+
 %union {
-    uintval uint
-    sval string
-    node Node
-    nodelist []Node
+	bval      bool
+	ival      int64
+	fval      float64
+	sval      string
+	datum     Datum
+	datumlist []Datum
 }
 
-%type	<node>		program
-			command
-			expression
-			literal
-			self_evaluating
+%type	<datumlist>	datum_star
+%type	<datum>		datum
+			simple_datum
+			compound_datum
+			boolean
 			number
-			procedure_call
-			operator
-			operand
-
-%type	<nodelist>	operand_star
+			string
+			symbol
+			list
 
 %token			LPAREN
 			RPAREN
 
-%token	<sval>		IDENT
-
-%token	<uintval>	UINTEGER10
+%token	<bval>		BOOLEAN
+%token	<ival>		INTEGER
+%token	<fval>		FLOAT
+%token	<sval>		STRING
+			IDENT
 
 %%
 
-program:	command
+top:		datum_star
 		{
-		    currentLexer.result = $1
-		}
-		;
-
-command: expression
-		{
-		    $$ = $1 // expression이 생성한 AST 노드를 그대로 반환
-		}
-		;
-
-/* <expression> −→ <identifier> */
-/* | <literal> */
-/* | <procedure call> */
-/* | <lambda expression> */
-/* | <conditional> */
-/* | <assignment> */
-/* | <derived expression> */
-/* | <macro use> */
-/* | <macro block> */
-/* | <includer> */
-
-expression:	IDENT
-		{
-		    $$ = &IdentifierNode{Value: $1}
-		}
-	|	literal
-		{
-		    $$ = $1
-		}
-	|	procedure_call
-		{
-		    $$ = $1
-		}
-		;
-
-/* <literal> −→ <quotation> | <self-evaluating> */
-
-literal:	self_evaluating
-	;
-
-/* <self-evaluating> −→ <boolean> | <number> | <vector> */
-/* | <character> | <string> | <bytevector> */
-
-self_evaluating:
-		number		
-	;
-
-number:		UINTEGER10
-		{
-		    $$ = &NumberNode{Value: $1}
+			yylex.(*yyLexerImpl).result = $1
 		}
 	;
 
-/* <procedure call> −→ (<operator> <operand>*) */
+/* <datum> -> <simple datum> | <compound datum> */
 
-procedure_call:	LPAREN operator operand_star RPAREN
+datum:		simple_datum
 		{
-		    $$ = &ProcedureCallNode{Operator: $2, Operands: $3}
+			$$ = $1
+		}
+	|	compound_datum
+		{
+			$$ = $1
 		}
 	;
 
-operator:	expression
+/* <simple datum> -> <boolean> | <number> | <string> | <symbol> */
+
+simple_datum:	boolean
+		{
+			$$ = $1
+		}
+	|	number
+		{
+			$$ = $1
+		}
+	|	string
+		{
+			$$ = $1
+		}
+	|	symbol
+		{
+			$$ = $1
+		}
 	;
 
-operand_star:
+boolean:	BOOLEAN
+		{
+			$$ = &BoolDatum{Value: $1}
+		}
+	;
+
+number:		INTEGER
+		{
+			$$ = &IntDatum{Value: $1}
+		}
+	|	FLOAT
+		{
+			$$ = &FloatDatum{Value: $1}
+		}
+	;
+
+string:		STRING
+		{
+			$$ = &StringDatum{Value: $1}
+		}
+	;
+
+/* <symbol> -> <identifier> */
+
+symbol:		IDENT
+		{
+			$$ = &SymbolDatum{Value: $1}
+		}
+	;
+
+/* <compound datum> -> <list> */
+
+compound_datum:	list
+		{
+			$$ = $1
+		}
+	;
+
+/* <list> -> (<datum>*) */
+
+list:		LPAREN datum_star RPAREN
+		{
+			$$ = &ListDatum{Elements: $2}
+		}
+	;
+
+datum_star:
 		/* empty */
 		{
-		    $$ = make([]Node, 0)
+			$$ = make([]Datum, 0)
 		}
-	|	operand_star operand
+	|	datum_star datum
 		{
-		    $$ = append($1, $2)
+			$$ = append($1, $2)
 		}
-	;
-
-operand:	expression
 	;
 
 %%
