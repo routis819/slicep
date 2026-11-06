@@ -14,13 +14,14 @@ import (
 type TokenType uint
 
 const (
-	TokenTypeIdent = TokenType(iota)
+	TokenEOF = TokenType(iota)
+	TokenError
+	TokenTypeIdent
 	TokenTypeBoolean
 	TokenTypeNumber
 	TokenTypeString
 	TokenTypeLparen
 	TokenTypeRparen
-	TokenEOF
 )
 
 type Token struct {
@@ -41,7 +42,12 @@ func run(name string, input io.Reader, tokchan chan<- Token) {
 
 	data, err := io.ReadAll(input)
 	if err != nil {
-		panic(fmt.Sprintf("%s: %v", name, err))
+		tokchan <- Token{
+			Type:  TokenError,
+			Value: fmt.Sprintf("%s: %v", name, err),
+		}
+
+		return
 	}
 
 	// Append sentinel zero byte for re2c EOF handling (re2c:eof = 0).
@@ -139,7 +145,12 @@ func run(name string, input io.Reader, tokchan chan<- Token) {
 			depth := 1
 			for depth > 0 {
 				if cursor >= limit {
-					panic(fmt.Sprintf("%s: unclosed nested comment", name))
+					tokchan <- Token{
+						Type:  TokenError,
+						Value: fmt.Sprintf("%s: unclosed nested comment", name),
+					}
+
+					return
 				}
 				if cursor+1 < limit && buf[cursor] == '#' && buf[cursor+1] == '|' {
 					depth++
@@ -196,7 +207,12 @@ func run(name string, input io.Reader, tokchan chan<- Token) {
 		}
 
 		* {
-			panic(fmt.Sprintf("%s: unexpected character %q at offset %d", name, buf[tokenStart], tokenStart))
+			tokchan <- Token{
+				Type:  TokenError,
+				Value: fmt.Sprintf("%s: unexpected character %q at offset %d", name, buf[tokenStart], tokenStart),
+			}
+
+			return
 		}
 		*/
 	}

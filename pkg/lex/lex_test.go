@@ -176,6 +176,31 @@ func TestLex(t *testing.T) {
 				{Type: lex.TokenEOF, Value: ""},
 			},
 		},
+		{
+			name:  "Closed Channel Zero Value is TokenEOF",
+			input: "",
+			want: []lex.Token{
+				{Type: lex.TokenEOF, Value: ""},
+			},
+		},
+		{
+			name:  "Invalid Input Emits TokenError",
+			input: "123abc",
+			want: []lex.Token{
+				{Type: lex.TokenError, Value: "Invalid Input Emits TokenError: unexpected character '1' at offset 0"},
+			},
+		},
+		{
+			name:  "Unclosed Nested Comment Emits TokenError",
+			input: "#| unclosed",
+			want: []lex.Token{
+				{Type: lex.TokenError, Value: "Unclosed Nested Comment Emits TokenError: unclosed nested comment"},
+			},
+		},
+	}
+
+	if (lex.Token{}).Type != lex.TokenEOF {
+		t.Fatalf("Expected zero-value Token.Type to be TokenEOF (0), got %v", (lex.Token{}).Type)
 	}
 
 	for _, tt := range tests {
