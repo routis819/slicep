@@ -16,13 +16,14 @@ import (
 type TokenType uint
 
 const (
-	TokenTypeIdent = TokenType(iota)
+	TokenEOF = TokenType(iota)
+	TokenError
+	TokenTypeIdent
 	TokenTypeBoolean
 	TokenTypeNumber
 	TokenTypeString
 	TokenTypeLparen
 	TokenTypeRparen
-	TokenEOF
 )
 
 type Token struct {
@@ -43,7 +44,12 @@ func run(name string, input io.Reader, tokchan chan<- Token) {
 
 	data, err := io.ReadAll(input)
 	if err != nil {
-		panic(fmt.Sprintf("%s: %v", name, err))
+		tokchan <- Token{
+			Type:  TokenError,
+			Value: fmt.Sprintf("%s: %v", name, err),
+		}
+
+		return
 	}
 
 	// Append sentinel zero byte for re2c EOF handling (re2c:eof = 0).
@@ -69,7 +75,7 @@ func run(name string, input io.Reader, tokchan chan<- Token) {
 
 		tokenStart := cursor
 		
-//line "lex.go":73
+//line "lex.go":79
 {
 	var yych byte
 	yyaccept := 0
@@ -125,11 +131,16 @@ func run(name string, input io.Reader, tokchan chan<- Token) {
 yy1:
 	cursor++
 yy2:
-//line "lex.re":198
+//line "lex.re":209
 	{
-			panic(fmt.Sprintf("%s: unexpected character %q at offset %d", name, buf[tokenStart], tokenStart))
+			tokchan <- Token{
+				Type:  TokenError,
+				Value: fmt.Sprintf("%s: unexpected character %q at offset %d", name, buf[tokenStart], tokenStart),
+			}
+
+			return
 		}
-//line "lex.go":133
+//line "lex.go":144
 yy3:
 	cursor++
 	yych = buf[cursor]
@@ -144,11 +155,11 @@ yy3:
 		goto yy4
 	}
 yy4:
-//line "lex.re":130
+//line "lex.re":136
 	{
 			continue
 		}
-//line "lex.go":152
+//line "lex.go":163
 yy5:
 	yyaccept = 0
 	cursor++
@@ -210,22 +221,22 @@ yy7:
 	}
 yy8:
 	cursor++
-//line "lex.re":162
+//line "lex.re":173
 	{
 			emit(TokenTypeLparen, tokenStart, cursor)
 
 			continue
 		}
-//line "lex.go":220
+//line "lex.go":231
 yy9:
 	cursor++
-//line "lex.re":168
+//line "lex.re":179
 	{
 			emit(TokenTypeRparen, tokenStart, cursor)
 
 			continue
 		}
-//line "lex.go":229
+//line "lex.go":240
 yy10:
 	yyaccept = 0
 	cursor++
@@ -373,22 +384,22 @@ yy13:
 		goto yy14
 	}
 yy14:
-//line "lex.re":134
+//line "lex.re":140
 	{
 			continue
 		}
-//line "lex.go":381
+//line "lex.go":392
 yy15:
 	cursor++
 yy16:
 	cursor = ctxmarker
-//line "lex.re":192
+//line "lex.re":203
 	{
 			emit(TokenTypeIdent, tokenStart, cursor)
 
 			continue
 		}
-//line "lex.go":392
+//line "lex.go":403
 yy17:
 	cursor++
 	yych = buf[cursor]
@@ -479,13 +490,13 @@ yy22:
 	}
 yy23:
 	cursor++
-//line "lex.re":174
+//line "lex.re":185
 	{
 			emit(TokenTypeString, tokenStart, cursor)
 
 			continue
 		}
-//line "lex.go":489
+//line "lex.go":500
 yy24:
 	cursor++
 	yych = buf[cursor]
@@ -623,12 +634,17 @@ yy32:
 	}
 yy33:
 	cursor++
-//line "lex.re":138
+//line "lex.re":144
 	{
 			depth := 1
 			for depth > 0 {
 				if cursor >= limit {
-					panic(fmt.Sprintf("%s: unclosed nested comment", name))
+					tokchan <- Token{
+						Type:  TokenError,
+						Value: fmt.Sprintf("%s: unclosed nested comment", name),
+					}
+
+					return
 				}
 				if cursor+1 < limit && buf[cursor] == '#' && buf[cursor+1] == '|' {
 					depth++
@@ -647,7 +663,7 @@ yy33:
 
 			continue
 		}
-//line "lex.go":651
+//line "lex.go":667
 yy34:
 	cursor++
 	yych = buf[cursor]
@@ -763,13 +779,13 @@ yy39:
 	cursor++
 yy40:
 	cursor = ctxmarker
-//line "lex.re":186
+//line "lex.re":197
 	{
 			emit(TokenTypeNumber, tokenStart, cursor)
 
 			continue
 		}
-//line "lex.go":773
+//line "lex.go":789
 yy41:
 	cursor++
 	yych = buf[cursor]
@@ -865,13 +881,13 @@ yy50:
 	cursor++
 yy51:
 	cursor = ctxmarker
-//line "lex.re":180
+//line "lex.re":191
 	{
 			emit(TokenTypeBoolean, tokenStart, cursor)
 
 			continue
 		}
-//line "lex.go":875
+//line "lex.go":891
 yy52:
 	cursor++
 	yych = buf[cursor]
@@ -1044,7 +1060,7 @@ yy64:
 		goto yy19
 	}
 }
-//line "lex.re":201
+//line "lex.re":217
 
 	}
 }
