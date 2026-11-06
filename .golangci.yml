@@ -1,5 +1,20 @@
 version: "2"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
 linters:
   default: standard
   enable:
+    - errorlint
+    - gocritic
+    - misspell
     - nlreturn
+    - prealloc
+    - revive
+    - unconvert
+  settings:
+    nlreturn:
+      block-size: 2
