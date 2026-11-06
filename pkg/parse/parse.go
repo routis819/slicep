@@ -2,4 +2,4 @@
 // stream.
 package parse
 
-//go:generate goyacc slicep.y
+//go:generate go run golang.org/x/tools/cmd/goyacc@v0.30.0 slicep.y
