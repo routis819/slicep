@@ -7,36 +7,24 @@ import __yyfmt__ "fmt"
 
 //line slicep.y:2
 
-type Node any
-
-type ExprNode struct{}
-
-type IdentifierNode struct {
-	Value string
-}
-
-type NumberNode struct {
-	Value uint
-}
-
-type ProcedureCallNode struct {
-	Operator Node
-	Operands []Node
-}
-
-//line slicep.y:22
+//line slicep.y:5
 type yySymType struct {
-	yys      int
-	uintval  uint
-	sval     string
-	node     Node
-	nodelist []Node
+	yys       int
+	bval      bool
+	ival      int64
+	fval      float64
+	sval      string
+	datum     Datum
+	datumlist []Datum
 }
 
 const LPAREN = 57346
 const RPAREN = 57347
-const IDENT = 57348
-const UINTEGER10 = 57349
+const BOOLEAN = 57348
+const INTEGER = 57349
+const FLOAT = 57350
+const STRING = 57351
+const IDENT = 57352
 
 var yyToknames = [...]string{
 	"$end",
@@ -44,8 +32,11 @@ var yyToknames = [...]string{
 	"$unk",
 	"LPAREN",
 	"RPAREN",
+	"BOOLEAN",
+	"INTEGER",
+	"FLOAT",
+	"STRING",
 	"IDENT",
-	"UINTEGER10",
 }
 
 var yyStatenames = [...]string{}
@@ -65,41 +56,42 @@ var yyExca = [...]int8{
 
 const yyPrivate = 57344
 
-const yyLast = 19
+const yyLast = 24
 
 var yyAct = [...]int8{
-	3, 8, 14, 4, 10, 8, 13, 4, 10, 12,
-	15, 11, 6, 9, 16, 7, 5, 2, 1,
+	2, 16, 18, 11, 12, 13, 14, 15, 16, 1,
+	11, 12, 13, 14, 15, 10, 9, 17, 8, 7,
+	6, 5, 4, 3,
 }
 
 var yyPact = [...]int16{
-	1, -1000, -1000, -1000, -1000, -1000, -1000, -1000, 1, -1000,
-	-1000, -1000, -1000, -3, -1000, -1000, -1000,
+	-1000, -1000, 4, -1000, -1000, -1000, -1000, -1000, -1000, -1000,
+	-1000, -1000, -1000, -1000, -1000, -1000, -1000, -3, -1000,
 }
 
 var yyPgo = [...]int8{
-	0, 18, 17, 0, 16, 15, 13, 12, 11, 10,
-	6,
+	0, 0, 23, 22, 21, 20, 19, 18, 16, 15,
+	9,
 }
 
 var yyR1 = [...]int8{
-	0, 1, 2, 3, 3, 3, 4, 5, 6, 7,
-	8, 10, 10, 9,
+	0, 10, 2, 2, 3, 3, 3, 3, 5, 6,
+	6, 7, 8, 4, 9, 1, 1,
 }
 
 var yyR2 = [...]int8{
-	0, 1, 1, 1, 1, 1, 1, 1, 1, 4,
-	1, 0, 2, 1,
+	0, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 3, 0, 2,
 }
 
 var yyChk = [...]int16{
-	-1000, -1, -2, -3, 6, -4, -7, -5, 4, -6,
-	7, -8, -3, -10, 5, -9, -3,
+	-1000, -10, -1, -2, -3, -4, -5, -6, -7, -8,
+	-9, 6, 7, 8, 9, 10, 4, -1, 5,
 }
 
 var yyDef = [...]int8{
-	0, -2, 1, 2, 3, 4, 5, 6, 0, 7,
-	8, 11, 10, 0, 9, 12, 13,
+	15, -2, 1, 16, 2, 3, 4, 5, 6, 7,
+	13, 8, 9, 10, 11, 12, 15, 0, 14,
 }
 
 var yyTok1 = [...]int8{
@@ -107,7 +99,7 @@ var yyTok1 = [...]int8{
 }
 
 var yyTok2 = [...]int8{
-	2, 3, 4, 5, 6, 7,
+	2, 3, 4, 5, 6, 7, 8, 9, 10,
 }
 
 var yyTok3 = [...]int8{
@@ -453,57 +445,99 @@ yydefault:
 
 	case 1:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:51
+//line slicep.y:36
 		{
-			currentLexer.result = yyDollar[1].node
+			yylex.(*yyLexerImpl).result = yyDollar[1].datumlist
 		}
 	case 2:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:57
+//line slicep.y:44
 		{
-			yyVAL.node = yyDollar[1].node // expression이 생성한 AST 노드를 그대로 반환
+			yyVAL.datum = yyDollar[1].datum
 		}
 	case 3:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:74
+//line slicep.y:48
 		{
-			yyVAL.node = &IdentifierNode{Value: yyDollar[1].sval}
+			yyVAL.datum = yyDollar[1].datum
 		}
 	case 4:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:78
+//line slicep.y:56
 		{
-			yyVAL.node = yyDollar[1].node
+			yyVAL.datum = yyDollar[1].datum
 		}
 	case 5:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:82
+//line slicep.y:60
 		{
-			yyVAL.node = yyDollar[1].node
+			yyVAL.datum = yyDollar[1].datum
+		}
+	case 6:
+		yyDollar = yyS[yypt-1 : yypt+1]
+//line slicep.y:64
+		{
+			yyVAL.datum = yyDollar[1].datum
+		}
+	case 7:
+		yyDollar = yyS[yypt-1 : yypt+1]
+//line slicep.y:68
+		{
+			yyVAL.datum = yyDollar[1].datum
 		}
 	case 8:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:100
+//line slicep.y:74
 		{
-			yyVAL.node = &NumberNode{Value: yyDollar[1].uintval}
+			yyVAL.datum = &BoolDatum{Value: yyDollar[1].bval}
 		}
 	case 9:
-		yyDollar = yyS[yypt-4 : yypt+1]
-//line slicep.y:108
+		yyDollar = yyS[yypt-1 : yypt+1]
+//line slicep.y:80
 		{
-			yyVAL.node = &ProcedureCallNode{Operator: yyDollar[2].node, Operands: yyDollar[3].nodelist}
+			yyVAL.datum = &IntDatum{Value: yyDollar[1].ival}
+		}
+	case 10:
+		yyDollar = yyS[yypt-1 : yypt+1]
+//line slicep.y:84
+		{
+			yyVAL.datum = &FloatDatum{Value: yyDollar[1].fval}
 		}
 	case 11:
-		yyDollar = yyS[yypt-0 : yypt+1]
-//line slicep.y:118
+		yyDollar = yyS[yypt-1 : yypt+1]
+//line slicep.y:90
 		{
-			yyVAL.nodelist = make([]Node, 0)
+			yyVAL.datum = &StringDatum{Value: yyDollar[1].sval}
 		}
 	case 12:
-		yyDollar = yyS[yypt-2 : yypt+1]
-//line slicep.y:122
+		yyDollar = yyS[yypt-1 : yypt+1]
+//line slicep.y:98
 		{
-			yyVAL.nodelist = append(yyDollar[1].nodelist, yyDollar[2].node)
+			yyVAL.datum = &SymbolDatum{Value: yyDollar[1].sval}
+		}
+	case 13:
+		yyDollar = yyS[yypt-1 : yypt+1]
+//line slicep.y:106
+		{
+			yyVAL.datum = yyDollar[1].datum
+		}
+	case 14:
+		yyDollar = yyS[yypt-3 : yypt+1]
+//line slicep.y:114
+		{
+			yyVAL.datum = &ListDatum{Elements: yyDollar[2].datumlist}
+		}
+	case 15:
+		yyDollar = yyS[yypt-0 : yypt+1]
+//line slicep.y:121
+		{
+			yyVAL.datumlist = make([]Datum, 0)
+		}
+	case 16:
+		yyDollar = yyS[yypt-2 : yypt+1]
+//line slicep.y:125
+		{
+			yyVAL.datumlist = append(yyDollar[1].datumlist, yyDollar[2].datum)
 		}
 	}
 	goto yystack /* stack new state and value */
