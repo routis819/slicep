@@ -4,7 +4,59 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/routis819/slicep/pkg/lex"
 )
+
+func stripNodePos(n Node) {
+	switch v := n.(type) {
+	case nil:
+	case *ProgramNode:
+		v.Pos = lex.Pos{}
+		for _, child := range v.Body {
+			stripNodePos(child)
+		}
+	case *IntNode:
+		v.Pos = lex.Pos{}
+	case *FloatNode:
+		v.Pos = lex.Pos{}
+	case *StringNode:
+		v.Pos = lex.Pos{}
+	case *BoolNode:
+		v.Pos = lex.Pos{}
+	case *IdentifierNode:
+		v.Pos = lex.Pos{}
+	case *BeginNode:
+		v.Pos = lex.Pos{}
+		for _, child := range v.Body {
+			stripNodePos(child)
+		}
+	case *DefineVarNode:
+		v.Pos = lex.Pos{}
+		stripNodePos(v.Value)
+	case *DefineFuncNode:
+		v.Pos = lex.Pos{}
+		for _, def := range v.Definitions {
+			stripNodePos(def)
+		}
+		for _, expr := range v.Sequence {
+			stripNodePos(expr)
+		}
+	case *SetNode:
+		v.Pos = lex.Pos{}
+		stripNodePos(v.Value)
+	case *IfNode:
+		v.Pos = lex.Pos{}
+		stripNodePos(v.Test)
+		stripNodePos(v.Consequent)
+		stripNodePos(v.Alternate)
+	case *ProcedureCallNode:
+		v.Pos = lex.Pos{}
+		for _, op := range v.Operands {
+			stripNodePos(op)
+		}
+	}
+}
 
 func parseDatums(t *testing.T, input string) []Datum {
 	t.Helper()
@@ -137,6 +189,8 @@ func TestAnalyzeExpression_Success(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
+			stripNodePos(got)
 
 			if len(got.Body) != 1 || !reflect.DeepEqual(got.Body[0], tt.want) {
 				t.Errorf("Analyze(%s) body = %#v, want [%#v]", tt.input, got.Body, tt.want)
@@ -466,6 +520,8 @@ func TestAnalyze_Success(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
+			stripNodePos(got)
+
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Analyze() =\n%#v\nwant:\n%#v", got, tt.want)
 			}
@@ -645,9 +701,36 @@ func TestAnalyze_EmptyProgram(t *testing.T) {
 }
 
 func TestAnalyzeDefinition_NilTarget(t *testing.T) {
-	_, err := analyzeDefinition([]Datum{nil, &IntDatum{Value: 1}})
+	_, err := analyzeDefinition(lex.Pos{}, []Datum{nil, &IntDatum{Value: 1}})
 	if err == nil {
 		t.Fatal("expected error for nil target in define, got nil")
+	}
+}
+
+func TestAnalyze_PosAndErrorLocations(t *testing.T) {
+	src := "(define x 10)\n  (set! 123 20)"
+	_, err := ParseProgram(strings.NewReader(src))
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	want := "2:9: set!: first argument must be an identifier"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+
+	prog, err := ParseProgram(strings.NewReader("(define x 10)\n(+ x 1)"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if prog.Pos != (lex.Pos{Line: 1, Column: 1, Offset: 0}) {
+		t.Errorf("prog.Pos = %#v, want Line 1 Col 1", prog.Pos)
+	}
+
+	call, ok := prog.Body[1].(*ProcedureCallNode)
+	if !ok || call.Pos != (lex.Pos{Line: 2, Column: 1, Offset: 14}) {
+		t.Errorf("call.Pos = %#v, want Line 2 Col 1 Offset 14", call)
 	}
 }
 

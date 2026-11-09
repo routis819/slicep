@@ -7,9 +7,12 @@ import __yyfmt__ "fmt"
 
 //line slicep.y:2
 
-//line slicep.y:5
+import "github.com/routis819/slicep/pkg/lex"
+
+//line slicep.y:7
 type yySymType struct {
 	yys       int
+	pos       lex.Pos
 	bval      bool
 	ival      int64
 	fval      float64
@@ -45,7 +48,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line slicep.y:130
+//line slicep.y:133
 
 //line yacctab:1
 var yyExca = [...]int8{
@@ -445,97 +448,97 @@ yydefault:
 
 	case 1:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:36
+//line slicep.y:39
 		{
 			yylex.(*yyLexerImpl).result = yyDollar[1].datumlist
 		}
 	case 2:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:44
+//line slicep.y:47
 		{
 			yyVAL.datum = yyDollar[1].datum
 		}
 	case 3:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:48
+//line slicep.y:51
 		{
 			yyVAL.datum = yyDollar[1].datum
 		}
 	case 4:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:56
+//line slicep.y:59
 		{
 			yyVAL.datum = yyDollar[1].datum
 		}
 	case 5:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:60
+//line slicep.y:63
 		{
 			yyVAL.datum = yyDollar[1].datum
 		}
 	case 6:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:64
+//line slicep.y:67
 		{
 			yyVAL.datum = yyDollar[1].datum
 		}
 	case 7:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:68
+//line slicep.y:71
 		{
 			yyVAL.datum = yyDollar[1].datum
 		}
 	case 8:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:74
+//line slicep.y:77
 		{
-			yyVAL.datum = &BoolDatum{Value: yyDollar[1].bval}
+			yyVAL.datum = &BoolDatum{Value: yyDollar[1].bval, Pos: yyDollar[1].pos}
 		}
 	case 9:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:80
+//line slicep.y:83
 		{
-			yyVAL.datum = &IntDatum{Value: yyDollar[1].ival}
+			yyVAL.datum = &IntDatum{Value: yyDollar[1].ival, Pos: yyDollar[1].pos}
 		}
 	case 10:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:84
+//line slicep.y:87
 		{
-			yyVAL.datum = &FloatDatum{Value: yyDollar[1].fval}
+			yyVAL.datum = &FloatDatum{Value: yyDollar[1].fval, Pos: yyDollar[1].pos}
 		}
 	case 11:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:90
+//line slicep.y:93
 		{
-			yyVAL.datum = &StringDatum{Value: yyDollar[1].sval}
+			yyVAL.datum = &StringDatum{Value: yyDollar[1].sval, Pos: yyDollar[1].pos}
 		}
 	case 12:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:98
+//line slicep.y:101
 		{
-			yyVAL.datum = &SymbolDatum{Value: yyDollar[1].sval}
+			yyVAL.datum = &SymbolDatum{Value: yyDollar[1].sval, Pos: yyDollar[1].pos}
 		}
 	case 13:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line slicep.y:106
+//line slicep.y:109
 		{
 			yyVAL.datum = yyDollar[1].datum
 		}
 	case 14:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line slicep.y:114
+//line slicep.y:117
 		{
-			yyVAL.datum = &ListDatum{Elements: yyDollar[2].datumlist}
+			yyVAL.datum = &ListDatum{Elements: yyDollar[2].datumlist, Pos: yyDollar[1].pos}
 		}
 	case 15:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line slicep.y:121
+//line slicep.y:124
 		{
 			yyVAL.datumlist = make([]Datum, 0)
 		}
 	case 16:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line slicep.y:125
+//line slicep.y:128
 		{
 			yyVAL.datumlist = append(yyDollar[1].datumlist, yyDollar[2].datum)
 		}
