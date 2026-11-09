@@ -8,7 +8,7 @@ import (
 	"io"
 )
 
-//go:generate go run golang.org/x/tools/cmd/stringer@v0.30.0 -type=TokenType
+//go:generate go run golang.org/x/tools/cmd/stringer@v0.52.0 -type=TokenType
 //go:generate re2go --no-generation-date -W -Werror lex.re -o lex.go
 
 type TokenType uint

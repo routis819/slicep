@@ -26,6 +26,8 @@ func Analyze(datums []Datum) (*ProgramNode, error) {
 }
 
 // ParseProgram parses the input token stream from r and transforms it into an AST ProgramNode.
+//
+//revive:disable-next-line:exported
 func ParseProgram(r io.Reader) (*ProgramNode, error) {
 	datums, err := Parse(r)
 	if err != nil {

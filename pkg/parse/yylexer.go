@@ -19,8 +19,8 @@ type yyLexerImpl struct {
 	err     error     // To store any lexical or parsing error
 }
 
-// NewYyLexer creates a new lexer that is compliant with the yyLexer interface.
-func NewYyLexer(r io.Reader) *yyLexerImpl {
+// newYyLexer creates a new lexer that is compliant with the yyLexer interface.
+func newYyLexer(r io.Reader) *yyLexerImpl {
 	return &yyLexerImpl{
 		tokchan: lex.Lex("input", r),
 	}
@@ -183,7 +183,7 @@ func (l *yyLexerImpl) Error(s string) {
 // It initializes the lexer, runs the goyacc-generated parser,
 // and returns the resulting slice of top-level Datums or an error.
 func Parse(r io.Reader) ([]Datum, error) {
-	lexer := NewYyLexer(r)
+	lexer := newYyLexer(r)
 
 	if yyParse(lexer) != 0 || lexer.err != nil {
 		return nil, lexer.err

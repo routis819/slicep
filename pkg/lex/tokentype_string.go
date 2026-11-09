@@ -23,8 +23,9 @@ const _TokenType_name = "TokenEOFTokenErrorTokenTypeIdentTokenTypeBooleanTokenTy
 var _TokenType_index = [...]uint8{0, 8, 18, 32, 48, 63, 78, 93, 108}
 
 func (i TokenType) String() string {
-	if i >= TokenType(len(_TokenType_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_TokenType_index)-1 {
 		return "TokenType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _TokenType_name[_TokenType_index[i]:_TokenType_index[i+1]]
+	return _TokenType_name[_TokenType_index[idx]:_TokenType_index[idx+1]]
 }
