@@ -1,8 +1,11 @@
 %{
 package parse
+
+import "github.com/routis819/slicep/pkg/lex"
 %}
 
 %union {
+	pos       lex.Pos
 	bval      bool
 	ival      int64
 	fval      float64
@@ -72,23 +75,23 @@ simple_datum:	boolean
 
 boolean:	BOOLEAN
 		{
-			$$ = &BoolDatum{Value: $1}
+			$$ = &BoolDatum{Value: $1, Pos: $<pos>1}
 		}
 	;
 
 number:		INTEGER
 		{
-			$$ = &IntDatum{Value: $1}
+			$$ = &IntDatum{Value: $1, Pos: $<pos>1}
 		}
 	|	FLOAT
 		{
-			$$ = &FloatDatum{Value: $1}
+			$$ = &FloatDatum{Value: $1, Pos: $<pos>1}
 		}
 	;
 
 string:		STRING
 		{
-			$$ = &StringDatum{Value: $1}
+			$$ = &StringDatum{Value: $1, Pos: $<pos>1}
 		}
 	;
 
@@ -96,7 +99,7 @@ string:		STRING
 
 symbol:		IDENT
 		{
-			$$ = &SymbolDatum{Value: $1}
+			$$ = &SymbolDatum{Value: $1, Pos: $<pos>1}
 		}
 	;
 
@@ -112,7 +115,7 @@ compound_datum:	list
 
 list:		LPAREN datum_star RPAREN
 		{
-			$$ = &ListDatum{Elements: $2}
+			$$ = &ListDatum{Elements: $2, Pos: $<pos>1}
 		}
 	;
 

@@ -13,10 +13,11 @@ import (
 // yyLexerImpl is a bridge between the channel-based lexer (lex.Lex)
 // and the interface expected by the goyacc-generated parser (yyLexer).
 type yyLexerImpl struct {
-	tokchan <-chan lex.Token
-	lastTok lex.Token // To store the last token for error reporting
-	result  []Datum   // To store the parsed top-level datums
-	err     error     // To store any lexical or parsing error
+	tokchan    <-chan lex.Token
+	lastTok    lex.Token // To store the last token for error reporting
+	openParens []lex.Pos // Stack of unclosed '(' positions
+	result     []Datum   // To store the parsed top-level datums
+	err        error     // To store any lexical or parsing error
 }
 
 // newYyLexer creates a new lexer that is compliant with the yyLexer interface.
@@ -33,6 +34,7 @@ func newYyLexer(r io.Reader) *yyLexerImpl {
 func (l *yyLexerImpl) Lex(lval *yySymType) int {
 	tok := <-l.tokchan
 	l.lastTok = tok
+	lval.pos = tok.Pos
 
 	switch tok.Type {
 	case lex.TokenTypeIdent:
@@ -48,7 +50,7 @@ func (l *yyLexerImpl) Lex(lval *yySymType) int {
 	case lex.TokenTypeString:
 		s, err := unquoteSchemeString(tok.Value)
 		if err != nil {
-			l.Error(fmt.Sprintf("invalid string: %v", err))
+			l.err = fmt.Errorf("%s: invalid string: %w", tok.Pos, err)
 
 			return 0
 		}
@@ -56,8 +58,14 @@ func (l *yyLexerImpl) Lex(lval *yySymType) int {
 
 		return STRING
 	case lex.TokenTypeLparen:
+		l.openParens = append(l.openParens, tok.Pos)
+
 		return LPAREN
 	case lex.TokenTypeRparen:
+		if len(l.openParens) > 0 {
+			l.openParens = l.openParens[:len(l.openParens)-1]
+		}
+
 		return RPAREN
 	case lex.TokenError:
 		l.err = fmt.Errorf("lexical error: %s", tok.Value)
@@ -90,7 +98,7 @@ func (l *yyLexerImpl) lexNumber(lval *yySymType, raw string) int {
 	if strings.ContainsAny(lower, ".e") {
 		f, err := strconv.ParseFloat(raw, 64)
 		if err != nil {
-			l.Error(fmt.Sprintf("invalid float: %s", raw))
+			l.err = fmt.Errorf("%s: invalid float %q: %w", l.lastTok.Pos, raw, err)
 
 			return 0
 		}
@@ -101,7 +109,7 @@ func (l *yyLexerImpl) lexNumber(lval *yySymType, raw string) int {
 
 	i, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
-		l.Error(fmt.Sprintf("invalid integer: %s", raw))
+		l.err = fmt.Errorf("%s: invalid integer %q: %w", l.lastTok.Pos, raw, err)
 
 		return 0
 	}
@@ -174,9 +182,24 @@ func unquoteSchemeString(raw string) (string, error) {
 // Error satisfies the yyLexer interface.
 // It's called by the parser when it encounters a syntax error.
 func (l *yyLexerImpl) Error(s string) {
-	if l.err == nil {
-		l.err = fmt.Errorf("syntax error near '%s': %s", l.lastTok.Value, s)
+	if l.err != nil {
+		return
 	}
+
+	if l.lastTok.Type == lex.TokenEOF {
+		if len(l.openParens) > 0 {
+			openPos := l.openParens[len(l.openParens)-1]
+			l.err = fmt.Errorf("%s: %s: unexpected EOF (unclosed '(' at %s)", l.lastTok.Pos, s, openPos)
+
+			return
+		}
+
+		l.err = fmt.Errorf("%s: %s: unexpected EOF", l.lastTok.Pos, s)
+
+		return
+	}
+
+	l.err = fmt.Errorf("%s: %s near %q", l.lastTok.Pos, s, l.lastTok.Value)
 }
 
 // Parse is the main entry point for the Stage 1 <datum> parser.

@@ -4,7 +4,39 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/routis819/slicep/pkg/lex"
 )
+
+func datumPos(d Datum) lex.Pos {
+	switch v := d.(type) {
+	case nil:
+		return lex.Pos{}
+	case *BoolDatum:
+		return v.Pos
+	case *IntDatum:
+		return v.Pos
+	case *FloatDatum:
+		return v.Pos
+	case *StringDatum:
+		return v.Pos
+	case *SymbolDatum:
+		return v.Pos
+	case *ListDatum:
+		return v.Pos
+	}
+
+	return lex.Pos{}
+}
+
+func errorfAt(pos lex.Pos, format string, args ...any) error {
+	msg := fmt.Sprintf(format, args...)
+	if pos.Line > 0 {
+		return fmt.Errorf("%s: %s", pos, msg)
+	}
+
+	return errors.New(msg)
+}
 
 // Analyze converts a slice of external representation Datums into an AST ProgramNode.
 func Analyze(datums []Datum) (*ProgramNode, error) {
@@ -22,7 +54,10 @@ func Analyze(datums []Datum) (*ProgramNode, error) {
 		body = append(body, node)
 	}
 
-	return &ProgramNode{Body: body}, nil
+	return &ProgramNode{
+		Body: body,
+		Pos:  datumPos(datums[0]),
+	}, nil
 }
 
 // ParseProgram parses the input token stream from r and transforms it into an AST ProgramNode.
@@ -55,9 +90,9 @@ func analyzeCommandOrDefinition(d Datum) (Node, error) {
 		if head, ok := list.Elements[0].(*SymbolDatum); ok {
 			switch head.Value {
 			case "define":
-				return analyzeDefinition(list.Elements[1:])
+				return analyzeDefinition(list.Pos, list.Elements[1:])
 			case "begin":
-				return analyzeBegin(list.Elements[1:])
+				return analyzeBegin(list.Pos, list.Elements[1:])
 			}
 		}
 	}
@@ -65,9 +100,9 @@ func analyzeCommandOrDefinition(d Datum) (Node, error) {
 	return analyzeExpression(d)
 }
 
-func analyzeBegin(args []Datum) (Node, error) {
+func analyzeBegin(pos lex.Pos, args []Datum) (Node, error) {
 	if len(args) == 0 {
-		return nil, errors.New("empty begin form")
+		return nil, errorfAt(pos, "empty begin form")
 	}
 
 	body := make([]Node, 0, len(args))
@@ -80,7 +115,10 @@ func analyzeBegin(args []Datum) (Node, error) {
 		body = append(body, node)
 	}
 
-	return &BeginNode{Body: body}, nil
+	return &BeginNode{
+		Body: body,
+		Pos:  pos,
+	}, nil
 }
 
 func isDefinitionDatum(d Datum) bool {
@@ -93,21 +131,21 @@ func isDefinitionDatum(d Datum) bool {
 	return false
 }
 
-func analyzeDefinition(args []Datum) (Node, error) {
+func analyzeDefinition(pos lex.Pos, args []Datum) (Node, error) {
 	if len(args) < 2 {
-		return nil, fmt.Errorf("define: expected at least 2 arguments, got %d", len(args))
+		return nil, errorfAt(pos, "define: expected at least 2 arguments, got %d", len(args))
 	}
 
 	switch target := args[0].(type) {
 	case nil:
-		return nil, errors.New("define: nil datum")
+		return nil, errorfAt(pos, "define: nil datum")
 	case *SymbolDatum:
 		if len(args) != 2 {
-			return nil, fmt.Errorf("define: variable definition expects 1 value expression, got %d", len(args)-1)
+			return nil, errorfAt(pos, "define: variable definition expects 1 value expression, got %d", len(args)-1)
 		}
 
 		if isSyntaxKeyword(target.Value) {
-			return nil, fmt.Errorf("define: cannot bind syntax keyword %q", target.Value)
+			return nil, errorfAt(target.Pos, "define: cannot bind syntax keyword %q", target.Value)
 		}
 
 		val, err := analyzeExpression(args[1])
@@ -118,20 +156,21 @@ func analyzeDefinition(args []Datum) (Node, error) {
 		return &DefineVarNode{
 			Name:  target.Value,
 			Value: val,
+			Pos:   pos,
 		}, nil
 
 	case *ListDatum:
 		if len(target.Elements) == 0 {
-			return nil, errors.New("define: function signature cannot be empty")
+			return nil, errorfAt(target.Pos, "define: function signature cannot be empty")
 		}
 
 		nameSym, ok := target.Elements[0].(*SymbolDatum)
 		if !ok {
-			return nil, errors.New("define: function name must be an identifier")
+			return nil, errorfAt(datumPos(target.Elements[0]), "define: function name must be an identifier")
 		}
 
 		if isSyntaxKeyword(nameSym.Value) {
-			return nil, fmt.Errorf("define: cannot bind syntax keyword %q as function name", nameSym.Value)
+			return nil, errorfAt(nameSym.Pos, "define: cannot bind syntax keyword %q as function name", nameSym.Value)
 		}
 
 		params := make([]string, 0, len(target.Elements)-1)
@@ -139,22 +178,22 @@ func analyzeDefinition(args []Datum) (Node, error) {
 		for _, elem := range target.Elements[1:] {
 			paramSym, ok := elem.(*SymbolDatum)
 			if !ok {
-				return nil, errors.New("define: parameter must be an identifier")
+				return nil, errorfAt(datumPos(elem), "define: parameter must be an identifier")
 			}
 
 			if isSyntaxKeyword(paramSym.Value) {
-				return nil, fmt.Errorf("define: parameter cannot be syntax keyword %q", paramSym.Value)
+				return nil, errorfAt(paramSym.Pos, "define: parameter cannot be syntax keyword %q", paramSym.Value)
 			}
 
 			if seen[paramSym.Value] {
-				return nil, fmt.Errorf("define: duplicate parameter name %q", paramSym.Value)
+				return nil, errorfAt(paramSym.Pos, "define: duplicate parameter name %q", paramSym.Value)
 			}
 
 			seen[paramSym.Value] = true
 			params = append(params, paramSym.Value)
 		}
 
-		defs, seq, err := analyzeBody(args[1:])
+		defs, seq, err := analyzeBody(pos, args[1:])
 		if err != nil {
 			return nil, err
 		}
@@ -164,18 +203,19 @@ func analyzeDefinition(args []Datum) (Node, error) {
 			Params:      params,
 			Definitions: defs,
 			Sequence:    seq,
+			Pos:         pos,
 		}, nil
 
 	case *BoolDatum, *IntDatum, *FloatDatum, *StringDatum:
-		return nil, errors.New("define: first argument must be an identifier or function signature list")
+		return nil, errorfAt(datumPos(target), "define: first argument must be an identifier or function signature list")
 	}
 
-	return nil, errors.New("unreachable")
+	return nil, errorfAt(pos, "unreachable")
 }
 
-func analyzeBody(bodyDatums []Datum) ([]Node, []Node, error) {
+func analyzeBody(pos lex.Pos, bodyDatums []Datum) ([]Node, []Node, error) {
 	if len(bodyDatums) == 0 {
-		return nil, nil, errors.New("empty function body: expected at least one expression")
+		return nil, nil, errorfAt(pos, "empty function body: expected at least one expression")
 	}
 
 	defs := make([]Node, 0)
@@ -195,7 +235,7 @@ func analyzeBody(bodyDatums []Datum) ([]Node, []Node, error) {
 	}
 
 	if i == len(bodyDatums) {
-		return nil, nil, errors.New("function body must end with at least one expression")
+		return nil, nil, errorfAt(pos, "function body must end with at least one expression")
 	}
 
 	seq := make([]Node, 0, len(bodyDatums)-i)
@@ -216,19 +256,19 @@ func analyzeExpression(d Datum) (Node, error) {
 	case nil:
 		return nil, errors.New("nil datum")
 	case *BoolDatum:
-		return &BoolNode{Value: v.Value}, nil
+		return &BoolNode{Value: v.Value, Pos: v.Pos}, nil
 	case *IntDatum:
-		return &IntNode{Value: v.Value}, nil
+		return &IntNode{Value: v.Value, Pos: v.Pos}, nil
 	case *FloatDatum:
-		return &FloatNode{Value: v.Value}, nil
+		return &FloatNode{Value: v.Value, Pos: v.Pos}, nil
 	case *StringDatum:
-		return &StringNode{Value: v.Value}, nil
+		return &StringNode{Value: v.Value, Pos: v.Pos}, nil
 	case *SymbolDatum:
 		if isSyntaxKeyword(v.Value) {
-			return nil, fmt.Errorf("unexpected syntax keyword %q as expression", v.Value)
+			return nil, errorfAt(v.Pos, "unexpected syntax keyword %q as expression", v.Value)
 		}
 
-		return &IdentifierNode{Name: v.Value}, nil
+		return &IdentifierNode{Name: v.Value, Pos: v.Pos}, nil
 	case *ListDatum:
 		return analyzeListExpression(v)
 	}
@@ -238,29 +278,29 @@ func analyzeExpression(d Datum) (Node, error) {
 
 func analyzeListExpression(list *ListDatum) (Node, error) {
 	if len(list.Elements) == 0 {
-		return nil, errors.New("empty list () is not a valid expression")
+		return nil, errorfAt(list.Pos, "empty list () is not a valid expression")
 	}
 
 	head, ok := list.Elements[0].(*SymbolDatum)
 	if !ok {
-		return nil, errors.New("operator must be an identifier")
+		return nil, errorfAt(datumPos(list.Elements[0]), "operator must be an identifier")
 	}
 
 	switch head.Value {
 	case "if":
-		return analyzeIf(list.Elements[1:])
+		return analyzeIf(list.Pos, list.Elements[1:])
 	case "set!":
-		return analyzeSet(list.Elements[1:])
+		return analyzeSet(list.Pos, list.Elements[1:])
 	case "define", "begin":
-		return nil, fmt.Errorf("%q is not allowed in expression context", head.Value)
+		return nil, errorfAt(list.Pos, "%q is not allowed in expression context", head.Value)
 	default:
-		return analyzeProcedureCall(head.Value, list.Elements[1:])
+		return analyzeProcedureCall(list.Pos, head.Value, list.Elements[1:])
 	}
 }
 
-func analyzeIf(args []Datum) (Node, error) {
+func analyzeIf(pos lex.Pos, args []Datum) (Node, error) {
 	if len(args) != 2 && len(args) != 3 {
-		return nil, fmt.Errorf("if: expected 2 or 3 arguments, got %d", len(args))
+		return nil, errorfAt(pos, "if: expected 2 or 3 arguments, got %d", len(args))
 	}
 
 	test, err := analyzeExpression(args[0])
@@ -287,21 +327,22 @@ func analyzeIf(args []Datum) (Node, error) {
 		Test:       test,
 		Consequent: consequent,
 		Alternate:  alternate,
+		Pos:        pos,
 	}, nil
 }
 
-func analyzeSet(args []Datum) (Node, error) {
+func analyzeSet(pos lex.Pos, args []Datum) (Node, error) {
 	if len(args) != 2 {
-		return nil, fmt.Errorf("set!: expected 2 arguments, got %d", len(args))
+		return nil, errorfAt(pos, "set!: expected 2 arguments, got %d", len(args))
 	}
 
 	sym, ok := args[0].(*SymbolDatum)
 	if !ok {
-		return nil, errors.New("set!: first argument must be an identifier")
+		return nil, errorfAt(datumPos(args[0]), "set!: first argument must be an identifier")
 	}
 
 	if isSyntaxKeyword(sym.Value) {
-		return nil, fmt.Errorf("set!: cannot assign to syntax keyword %q", sym.Value)
+		return nil, errorfAt(sym.Pos, "set!: cannot assign to syntax keyword %q", sym.Value)
 	}
 
 	val, err := analyzeExpression(args[1])
@@ -312,10 +353,11 @@ func analyzeSet(args []Datum) (Node, error) {
 	return &SetNode{
 		Name:  sym.Value,
 		Value: val,
+		Pos:   pos,
 	}, nil
 }
 
-func analyzeProcedureCall(op string, args []Datum) (Node, error) {
+func analyzeProcedureCall(pos lex.Pos, op string, args []Datum) (Node, error) {
 	operands := make([]Node, 0, len(args))
 	for _, arg := range args {
 		node, err := analyzeExpression(arg)
@@ -329,5 +371,6 @@ func analyzeProcedureCall(op string, args []Datum) (Node, error) {
 	return &ProcedureCallNode{
 		Operator: op,
 		Operands: operands,
+		Pos:      pos,
 	}, nil
 }
