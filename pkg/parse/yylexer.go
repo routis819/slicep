@@ -10,10 +10,10 @@ import (
 	"github.com/routis819/slicep/pkg/lex"
 )
 
-// yyLexerImpl is a bridge between the channel-based lexer (lex.Lex)
+// yyLexerImpl is a bridge between the synchronous lexer (lex.Lexer)
 // and the interface expected by the goyacc-generated parser (yyLexer).
 type yyLexerImpl struct {
-	tokchan    <-chan lex.Token
+	lexer      *lex.Lexer
 	lastTok    lex.Token // To store the last token for error reporting
 	openParens []lex.Pos // Stack of unclosed '(' positions
 	result     []Datum   // To store the parsed top-level datums
@@ -23,16 +23,16 @@ type yyLexerImpl struct {
 // newYyLexer creates a new lexer that is compliant with the yyLexer interface.
 func newYyLexer(r io.Reader) *yyLexerImpl {
 	return &yyLexerImpl{
-		tokchan: lex.Lex("input", r),
+		lexer: lex.New("input", r),
 	}
 }
 
 // Lex satisfies the yyLexer interface.
-// It reads the next token from the channel and maps it to the
+// It reads the next token from the lexer and maps it to the
 // integer token types defined in the parser. It also populates the
 // lval structure with the token's semantic value.
 func (l *yyLexerImpl) Lex(lval *yySymType) int {
-	tok := <-l.tokchan
+	tok := l.lexer.Next()
 	l.lastTok = tok
 	lval.pos = tok.Pos
 

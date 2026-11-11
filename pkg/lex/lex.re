@@ -47,96 +47,122 @@ type Token struct {
 	Pos   Pos
 }
 
-// Lex creates a new lexer and scans tokens from input into the returned channel.
-func Lex(name string, input io.Reader) chan Token {
-	tokchan := make(chan Token)
-	go run(name, input, tokchan)
-
-	return tokchan
+// Lexer scans tokens synchronously from an input stream.
+type Lexer struct {
+	name      string
+	buf       []byte
+	limit     int
+	cursor    int
+	line      int
+	col       int
+	posOffset int
+	readErr   error
+	done      bool
 }
 
-func run(name string, input io.Reader, tokchan chan<- Token) {
-	defer close(tokchan)
-
+// New creates a new synchronous Lexer that reads from input.
+func New(name string, input io.Reader) *Lexer {
 	data, err := io.ReadAll(input)
 	if err != nil {
-		tokchan <- Token{
-			Type:  TokenError,
-			Value: fmt.Sprintf("%s: %v", name, err),
+		return &Lexer{
+			name:    name,
+			readErr: err,
 		}
-
-		return
 	}
 
 	// Append sentinel zero byte for re2c EOF handling (re2c:eof = 0).
 	buf := append(data, 0)
-	limit := len(buf) - 1
-	cursor := 0
-	marker := 0
-	ctxmarker := 0
-	line := 1
-	col := 1
-	posOffset := 0
 
-	posAt := func(target int) Pos {
-		for ; posOffset < target; posOffset++ {
-			b := buf[posOffset]
-			if b == '\r' {
-				if posOffset+1 >= limit || buf[posOffset+1] != '\n' {
-					line++
-					col = 1
-				}
-			} else if b == '\n' {
-				line++
-				col = 1
-			} else if utf8.RuneStart(b) {
-				col++
+	return &Lexer{
+		name:  name,
+		buf:   buf,
+		limit: len(buf) - 1,
+		line:  1,
+		col:   1,
+	}
+}
+
+func (l *Lexer) posAt(target int) Pos {
+	for ; l.posOffset < target; l.posOffset++ {
+		b := l.buf[l.posOffset]
+		if b == '\r' {
+			if l.posOffset+1 >= l.limit || l.buf[l.posOffset+1] != '\n' {
+				l.line++
+				l.col = 1
 			}
-		}
-
-		return Pos{
-			Line:   line,
-			Column: col,
-			Offset: target,
-		}
-	}
-
-	emit := func(t TokenType, start, end int) {
-		tokchan <- Token{
-			Type:  t,
-			Value: string(buf[start:end]),
-			Pos:   posAt(start),
+		} else if b == '\n' {
+			l.line++
+			l.col = 1
+		} else if utf8.RuneStart(b) {
+			l.col++
 		}
 	}
 
-	emitError := func(start int, format string, args ...any) {
-		pos := posAt(start)
-		msg := fmt.Sprintf(format, args...)
-		tokchan <- Token{
+	return Pos{
+		Line:   l.line,
+		Column: l.col,
+		Offset: target,
+	}
+}
+
+func (l *Lexer) emit(t TokenType, start, end int) Token {
+	return Token{
+		Type:  t,
+		Value: string(l.buf[start:end]),
+		Pos:   l.posAt(start),
+	}
+}
+
+func (l *Lexer) emitError(start int, format string, args ...any) Token {
+	l.done = true
+	pos := l.posAt(start)
+	msg := fmt.Sprintf(format, args...)
+
+	return Token{
+		Type:  TokenError,
+		Value: fmt.Sprintf("%s:%d:%d: %s", l.name, pos.Line, pos.Column, msg),
+		Pos:   pos,
+	}
+}
+
+// Next scans and returns the next token from the input.
+// Once TokenEOF or TokenError is returned, subsequent calls return TokenEOF.
+func (l *Lexer) Next() Token {
+	if l.readErr != nil {
+		err := l.readErr
+		l.readErr = nil
+		l.done = true
+
+		return Token{
 			Type:  TokenError,
-			Value: fmt.Sprintf("%s:%d:%d: %s", name, pos.Line, pos.Column, msg),
-			Pos:   pos,
+			Value: fmt.Sprintf("%s: %v", l.name, err),
 		}
 	}
+
+	if l.done {
+		return l.emit(TokenEOF, l.cursor, l.cursor)
+	}
+
+	var marker, ctxmarker int
 
 	for {
-		if cursor >= limit {
-			emit(TokenEOF, cursor, cursor)
+		if l.cursor >= l.limit {
+			l.done = true
 
-			return
+			return l.emit(TokenEOF, l.cursor, l.cursor)
 		}
 
-		tokenStart := cursor
+		tokenStart := l.cursor
 		/*!re2c
 		re2c:flags:utf-8 = 1;
 		re2c:yyfill:enable = 0;
 		re2c:define:YYCTYPE = byte;
-		re2c:define:YYPEEK = "buf[cursor]";
-		re2c:define:YYSKIP = "cursor++";
-		re2c:define:YYBACKUP = "marker = cursor";
-		re2c:define:YYRESTORE = "cursor = marker";
-		re2c:define:YYBACKUPCTX = "ctxmarker = cursor";
-		re2c:define:YYRESTORECTX = "cursor = ctxmarker";
+		re2c:define:YYPEEK = "l.buf[l.cursor]";
+		re2c:define:YYSKIP = "l.cursor++";
+		re2c:define:YYBACKUP = "marker = l.cursor";
+		re2c:define:YYRESTORE = "l.cursor = marker";
+		re2c:define:YYBACKUPCTX = "ctxmarker = l.cursor";
+		re2c:define:YYRESTORECTX = "l.cursor = ctxmarker";
 
 		intraline_whitespace = [ \t];
 		line_ending          = "\n" | "\r\n" | "\r";
@@ -201,94 +227,71 @@ func run(name string, input io.Reader, tokchan chan<- Token) {
 		"#|" {
 			depth := 1
 			for depth > 0 {
-				if cursor >= limit {
-					emitError(tokenStart, "unclosed nested comment")
-
-					return
+				if l.cursor >= l.limit {
+					return l.emitError(tokenStart, "unclosed nested comment")
 				}
-				if cursor+1 < limit && buf[cursor] == '#' && buf[cursor+1] == '|' {
+				if l.cursor+1 < l.limit && l.buf[l.cursor] == '#' && l.buf[l.cursor+1] == '|' {
 					depth++
-					cursor += 2
+					l.cursor += 2
 
 					continue
 				}
-				if cursor+1 < limit && buf[cursor] == '|' && buf[cursor+1] == '#' {
+				if l.cursor+1 < l.limit && l.buf[l.cursor] == '|' && l.buf[l.cursor+1] == '#' {
 					depth--
-					cursor += 2
+					l.cursor += 2
 
 					continue
 				}
-				cursor++
+				l.cursor++
 			}
 
 			continue
 		}
 
 		"(" {
-			emit(TokenTypeLparen, tokenStart, cursor)
-
-			continue
+			return l.emit(TokenTypeLparen, tokenStart, l.cursor)
 		}
 
 		")" {
-			emit(TokenTypeRparen, tokenStart, cursor)
-
-			continue
+			return l.emit(TokenTypeRparen, tokenStart, l.cursor)
 		}
 
 		string {
-			emit(TokenTypeString, tokenStart, cursor)
-
-			continue
+			return l.emit(TokenTypeString, tokenStart, l.cursor)
 		}
 
 		"\"" invalid_string_char* "\"" {
-			emitError(tokenStart, "invalid escape sequence in string literal")
-
-			return
+			return l.emitError(tokenStart, "invalid escape sequence in string literal")
 		}
 
 		"\"" invalid_string_char* "\\"? {
-			emitError(tokenStart, "unclosed string literal")
-
-			return
+			return l.emitError(tokenStart, "unclosed string literal")
 		}
 
 		boolean / delimiter_or_eof {
-			emit(TokenTypeBoolean, tokenStart, cursor)
-
-			continue
+			return l.emit(TokenTypeBoolean, tokenStart, l.cursor)
 		}
 
 		number / delimiter_or_eof {
-			emit(TokenTypeNumber, tokenStart, cursor)
-
-			continue
+			return l.emit(TokenTypeNumber, tokenStart, l.cursor)
 		}
 
 		identifier / delimiter_or_eof {
-			emit(TokenTypeIdent, tokenStart, cursor)
-
-			continue
+			return l.emit(TokenTypeIdent, tokenStart, l.cursor)
 		}
 
 		non_delimiter{2,} {
-			emitError(tokenStart, "invalid token %q", string(buf[tokenStart:cursor]))
-
-			return
+			return l.emitError(tokenStart, "invalid token %q", string(l.buf[tokenStart:l.cursor]))
 		}
 
 		non_delimiter | "|" {
-			r, _ := utf8.DecodeRune(buf[tokenStart:cursor])
-			emitError(tokenStart, "unexpected character %q", r)
+			r, _ := utf8.DecodeRune(l.buf[tokenStart:l.cursor])
 
-			return
+			return l.emitError(tokenStart, "unexpected character %q", r)
 		}
 
 		* {
-			emitError(tokenStart, "invalid UTF-8 byte 0x%02x", buf[tokenStart])
-
-			return
+			return l.emitError(tokenStart, "invalid UTF-8 byte 0x%02x", l.buf[tokenStart])
 		}
 		*/
 	}

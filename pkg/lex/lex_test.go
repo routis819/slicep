@@ -1,7 +1,9 @@
 package lex_test
 
 import (
+	"errors"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -187,7 +189,7 @@ func TestLex(t *testing.T) {
 			},
 		},
 		{
-			name:  "Closed Channel Zero Value is TokenEOF",
+			name:  "Empty Input Emits TokenEOF",
 			input: "",
 			want: []lex.Token{
 				{Type: lex.TokenEOF, Value: "", Pos: lex.Pos{Line: 1, Column: 1, Offset: 0}},
@@ -276,16 +278,62 @@ func TestLex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokchan := lex.Lex(tt.name, strings.NewReader(tt.input))
+			lexer := lex.New(tt.name, strings.NewReader(tt.input))
 
 			tokens := []lex.Token{}
-			for tok := range tokchan {
+			for {
+				tok := lexer.Next()
 				tokens = append(tokens, tok)
+				if tok.Type == lex.TokenEOF || tok.Type == lex.TokenError {
+					break
+				}
 			}
 
 			if !reflect.DeepEqual(tt.want, tokens) {
 				t.Errorf("Expected %#v, got %#v", tt.want, tokens)
 			}
+
+			if afterTok := lexer.Next(); afterTok.Type != lex.TokenEOF {
+				t.Errorf("Expected subsequent Next() to return TokenEOF, got %#v", afterTok)
+			}
 		})
+	}
+}
+
+type errReader struct {
+	err error
+}
+
+func (r errReader) Read(_ []byte) (int, error) {
+	return 0, r.err
+}
+
+func TestLexReaderError(t *testing.T) {
+	lexer := lex.New("bad-reader", errReader{err: errors.New("read failed")})
+
+	tok := lexer.Next()
+	if tok.Type != lex.TokenError || tok.Value != "bad-reader: read failed" {
+		t.Fatalf("Expected TokenError with reader message, got %#v", tok)
+	}
+
+	if nextTok := lexer.Next(); nextTok.Type != lex.TokenEOF {
+		t.Fatalf("Expected subsequent Next() after reader error to return TokenEOF, got %#v", nextTok)
+	}
+}
+
+func TestLexEarlyTerminationNoGoroutineLeak(t *testing.T) {
+	before := runtime.NumGoroutine()
+
+	for range 100 {
+		lexer := lex.New("early-stop", strings.NewReader("(+ 1 2 3 4 5)"))
+		tok := lexer.Next()
+		if tok.Type != lex.TokenTypeLparen {
+			t.Fatalf("Expected '(', got %#v", tok)
+		}
+	}
+
+	after := runtime.NumGoroutine()
+	if after > before {
+		t.Fatalf("Possible goroutine leak: before=%d, after=%d", before, after)
 	}
 }
