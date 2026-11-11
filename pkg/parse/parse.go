@@ -12,19 +12,104 @@ import (
 	"github.com/routis819/slicep/pkg/lex"
 )
 
-//go:generate go run golang.org/x/tools/cmd/goyacc@v0.52.0 slicep.y
+const maxNestingDepth = 256
+
+type parser struct {
+	lexer *lex.Lexer
+}
 
 // Parse is the main entry point for the Stage 1 <datum> parser.
 // It reads tokens from r and returns the resulting slice of top-level
 // Datums or an error.
 func Parse(r io.Reader) ([]Datum, error) {
-	lexer := newYyLexer(r)
-
-	if yyParse(lexer) != 0 || lexer.err != nil {
-		return nil, lexer.err
+	p := &parser{
+		lexer: lex.New("input", r),
 	}
 
-	return lexer.result, nil
+	return p.parseTop()
+}
+
+func (p *parser) parseTop() ([]Datum, error) {
+	datums := make([]Datum, 0)
+
+	for {
+		tok := p.lexer.Next()
+		if tok.Type == lex.TokenEOF {
+			return datums, nil
+		}
+
+		d, err := p.parseDatum(tok, 0)
+		if err != nil {
+			return nil, err
+		}
+
+		datums = append(datums, d)
+	}
+}
+
+func (p *parser) parseDatum(tok lex.Token, depth int) (Datum, error) {
+	switch tok.Type {
+	case lex.TokenTypeBoolean:
+		return &BoolDatum{
+			Value: tok.Value == "#t" || tok.Value == "#true",
+			Pos:   tok.Pos,
+		}, nil
+	case lex.TokenTypeNumber:
+		return parseNumber(tok)
+	case lex.TokenTypeString:
+		s, err := unquoteSchemeString(tok.Value)
+		if err != nil {
+			return nil, fmt.Errorf("%s: invalid string: %w", tok.Pos, err)
+		}
+
+		return &StringDatum{
+			Value: s,
+			Pos:   tok.Pos,
+		}, nil
+	case lex.TokenTypeIdent:
+		return &SymbolDatum{
+			Value: tok.Value,
+			Pos:   tok.Pos,
+		}, nil
+	case lex.TokenTypeLparen:
+		return p.parseList(tok.Pos, depth+1)
+	case lex.TokenTypeRparen:
+		return nil, fmt.Errorf("%s: syntax error near %q", tok.Pos, tok.Value)
+	case lex.TokenError:
+		return nil, fmt.Errorf("lexical error: %s", tok.Value)
+	case lex.TokenEOF:
+		return nil, fmt.Errorf("%s: syntax error: unexpected EOF", tok.Pos)
+	default:
+		return nil, fmt.Errorf("%s: unexpected token %v", tok.Pos, tok.Type)
+	}
+}
+
+func (p *parser) parseList(openPos lex.Pos, depth int) (Datum, error) {
+	if depth > maxNestingDepth {
+		return nil, fmt.Errorf("%s: syntax error: maximum nesting depth (%d) exceeded", openPos, maxNestingDepth)
+	}
+
+	elements := make([]Datum, 0)
+
+	for {
+		tok := p.lexer.Next()
+		switch tok.Type {
+		case lex.TokenTypeRparen:
+			return &ListDatum{
+				Elements: elements,
+				Pos:      openPos,
+			}, nil
+		case lex.TokenEOF:
+			return nil, fmt.Errorf("%s: syntax error: unexpected EOF (unclosed '(' at %s)", tok.Pos, openPos)
+		default:
+			elem, err := p.parseDatum(tok, depth)
+			if err != nil {
+				return nil, err
+			}
+
+			elements = append(elements, elem)
+		}
+	}
 }
 
 func parseNumber(tok lex.Token) (Datum, error) {
