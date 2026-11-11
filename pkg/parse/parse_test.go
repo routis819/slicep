@@ -146,6 +146,34 @@ func TestParse(t *testing.T) {
 			wantErr:    true,
 			wantErrSub: `1:1: invalid integer "99999999999999999999999999"`,
 		},
+		{
+			name:       "Error: Float overflow",
+			input:      "1e9999",
+			want:       nil,
+			wantErr:    true,
+			wantErrSub: `1:1: invalid float "1e9999"`,
+		},
+		{
+			name:       "Error: Nested unclosed parenthesis reports innermost open position",
+			input:      "(+ (* 1 2",
+			want:       nil,
+			wantErr:    true,
+			wantErrSub: "1:10: syntax error: unexpected EOF (unclosed '(' at 1:4)",
+		},
+		{
+			name:       "Error: Deeply nested parentheses exceed maxNestingDepth",
+			input:      strings.Repeat("(", 257) + strings.Repeat(")", 257),
+			want:       nil,
+			wantErr:    true,
+			wantErrSub: "1:257: syntax error: maximum nesting depth (256) exceeded",
+		},
+		{
+			name:       "Error: Malicious unclosed deep nesting fails safely without panic",
+			input:      strings.Repeat("(", 10000),
+			want:       nil,
+			wantErr:    true,
+			wantErrSub: "1:257: syntax error: maximum nesting depth (256) exceeded",
+		},
 	}
 
 	for _, tt := range tests {
@@ -166,4 +194,16 @@ func TestParse(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("Max nesting depth boundary (256) succeeds", func(t *testing.T) {
+		input := strings.Repeat("(", 256) + "1" + strings.Repeat(")", 256)
+		got, err := parse.Parse(strings.NewReader(input))
+		if err != nil {
+			t.Fatalf("Parse() unexpected error at maxNestingDepth: %v", err)
+		}
+
+		if len(got) != 1 {
+			t.Fatalf("Parse() got %d top-level datums, want 1", len(got))
+		}
+	})
 }
